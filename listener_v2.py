@@ -212,7 +212,7 @@ def setup_gpio():
     else:
         print("Warning: gpiozero not found. Mocking button functionality.")
     if AudioController is not None:
-        state.audio = AudioController(player="mpv --audio-device=alsa/hw:0,0")
+        state.audio = AudioController()
 
 def main():
     global application
