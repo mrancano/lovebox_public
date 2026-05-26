@@ -12,7 +12,10 @@ echo "=== Updating System OS ==="
 sudo apt-get update && sudo apt-get upgrade -y
 
 echo "=== Installing Dependencies ==="
-sudo apt-get install -y git python3-venv python3-pip swig python3-dev liblgpio-dev
+sudo apt-get install -y git python3-venv python3-pip swig python3-dev liblgpio-dev mpv'
+
+echo "=== Installing Speaker Libraries ==="
+curl -sS https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/main/converted_shell_scripts/i2samp.sh | bash
 
 echo "=== Setting up Lovebox Directory ==="
 if [ ! -d "$APP_DIR" ]; then
