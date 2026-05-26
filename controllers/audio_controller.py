@@ -47,30 +47,33 @@ class AudioController:
         )
 
     def _convert_to_wav(self, file_path: Path) -> Path:
-        """Converts the input file to WAV format using ffmpeg if it is not already a WAV."""
-        if file_path.suffix.lower() == ".wav":
-            return file_path
+            """Converts the input file to a strictly formatted WAV using ffmpeg."""
+            if not shutil.which("ffmpeg"):
+                raise FileNotFoundError("ffmpeg is required to convert audio to WAV but was not found.")
 
-        if not shutil.which("ffmpeg"):
-            raise FileNotFoundError("ffmpeg is required to convert audio to WAV but was not found.")
+            # Create a temporary file for the WAV output
+            fd, temp_wav_path = tempfile.mkstemp(suffix=".wav")
+            os.close(fd) 
 
-        # Create a temporary file for the WAV output
-        fd, temp_wav_path = tempfile.mkstemp(suffix=".wav")
-        os.close(fd) 
+            try:
+                # Force ALSA/Adafruit-friendly format: 16-bit, 48kHz, Stereo
+                subprocess.run(
+                    [
+                        "ffmpeg", "-y", "-i", str(file_path),
+                        "-acodec", "pcm_s16le",  # Force S16_LE (16-bit little-endian)
+                        "-ar", "48000",          # Force 48000Hz sample rate
+                        "-ac", "2",              # Force 2 channels (stereo)
+                        temp_wav_path
+                    ],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            except subprocess.CalledProcessError as e:
+                os.remove(temp_wav_path)
+                raise RuntimeError(f"Failed to convert {file_path} to WAV.") from e
 
-        try:
-            # Convert to WAV, overwriting the temp file, suppressing output
-            subprocess.run(
-                ["ffmpeg", "-y", "-i", str(file_path), temp_wav_path],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-        except subprocess.CalledProcessError as e:
-            os.remove(temp_wav_path)
-            raise RuntimeError(f"Failed to convert {file_path} to WAV.") from e
-
-        return Path(temp_wav_path)
+            return Path(temp_wav_path)
 
     def play_audio(self, file_path: str):
         audio_file = Path(file_path)
