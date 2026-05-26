@@ -107,7 +107,7 @@ async def process_message(kind: str, argument_data: str):
         print("Processing task was CANCELLED.")
         raise
     finally:
-        state.servo.go_to_degrees(0)
+        #state.servo.go_to_degrees(0)
         state.display.set_black()
         cleanup_media()
         state.active_task = None
@@ -214,9 +214,9 @@ async def handle_button_press():
         if application and application.bot:
             try:
                 print("Sending ❤️ to the last chat...")
-                state.servo.go_to_degrees(180)
+                #state.servo.go_to_degrees(180)
                 await application.bot.send_message(chat_id=MY_CHAT_ID, text="❤️")
-                state.servo.go_to_degrees(0)
+                #state.servo.go_to_degrees(0)
                 print(f"Message sent successfully to :{MY_CHAT_ID}")
             except Exception as e:
                 print(f"Failed to send message: {e}")
@@ -232,7 +232,8 @@ def setup_gpio():
         hardware_button = Button(BUTTON_PIN, pull_up=True, bounce_time=0.2)
         hardware_button.when_pressed = button_callback
     if ServoController is not None:
-        state.servo = ServoController()
+        #state.servo = ServoController()
+        state.servo = None
     if DisplayController is not None:
         state.display = DisplayController()
         state.display.set_black()
