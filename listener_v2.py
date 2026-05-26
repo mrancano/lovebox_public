@@ -63,7 +63,7 @@ async def process_message(kind: str, argument_data: str):
     """The async task that replaces on_message.py"""
     try:
         print(f"Target program started. Processing {kind}...")
-        state.servo.go_to_degrees(180)
+        #state.servo.go_to_degrees(180)
         if kind == "text":
             print(f"The text says: {argument_data}")
             # Simulate some long-running work
