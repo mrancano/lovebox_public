@@ -29,8 +29,8 @@ async def convert_to_wav(input_filepath: str) -> str:
     # Run FFmpeg asynchronously to avoid blocking the bot's event loop
     process = await asyncio.create_subprocess_exec(
         *command,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL
+        stdout=None,#asyncio.subprocess.DEVNULL,
+        stderr=None,#asyncio.subprocess.DEVNULL
     )
     await process.communicate()
 
