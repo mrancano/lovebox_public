@@ -1,5 +1,6 @@
 .env
 .venv/
 .python-version
+one_line_install_commands.txt
 CONTEXT.md
 SOFTWARE-CONTEXT.md

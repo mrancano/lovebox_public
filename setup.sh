@@ -5,7 +5,7 @@
 set -e 
 
 # Define variables
-REPO_URL="https://github.com/mrancano/lovebox.git"
+REPO_URL="https://github.com/mrancano/lovebox_public.git"
 APP_DIR="$HOME/src/lovebox"
 
 echo "=== Updating System OS ==="
