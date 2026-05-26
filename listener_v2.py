@@ -73,8 +73,7 @@ async def process_message(kind: str, argument_data: str):
             await asyncio.sleep(5)
         elif kind in ["audio", "voice"]:
             print(f"Playing audio located at: {state.current_media_path}")
-            print(f"Playing audio located at: {state.current_media_path}")
-            
+                        
             # Run aplay asynchronously
             process = await asyncio.create_subprocess_exec(
                 "aplay", state.current_media_path,
