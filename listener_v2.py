@@ -8,7 +8,7 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
 from controllers.servo_controller import ServoController
 from controllers.display_controller import DisplayController
-from controllers.audio_controller import AudioController
+from controllers.audio_controller import convert_to_wav
 
 try:
     from gpiozero import Button
@@ -39,7 +39,7 @@ class AppState:
         self.main_loop = None
         self.servo = None
         self.display = None
-        self.audio = None
+        self.current_media_path = None
 state = AppState()
 application = None
 
@@ -72,11 +72,23 @@ async def process_message(kind: str, argument_data: str):
             # Simulate some long-running work
             await asyncio.sleep(5)
         elif kind in ["audio", "voice"]:
-            print(f"Playing audio located at: {argument_data}")
-            if state.audio:
-                await asyncio.to_thread(state.audio.play_audio, argument_data)
+            print(f"Playing audio located at: {state.current_media_path}")
+            print(f"Playing audio located at: {state.current_media_path}")
+            
+            # Run aplay asynchronously
+            process = await asyncio.create_subprocess_exec(
+                "aplay", state.current_media_path,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL
+            )
+            
+            # Await the process to finish playing the audio
+            await process.communicate()
+            
+            if process.returncode == 0:
+                print("Audio playback finished successfully.")
             else:
-                print("Audio controller not initialized.")
+                print(f"Failed to play audio at {state.current_media_path}. Check aplay logs.")
         elif kind == "photo":
             print(f"Displaying photo located at: {argument_data}")
             if state.display:
@@ -143,26 +155,39 @@ async def trigger_program(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await new_file.download_to_drive(filepath)
         argument_data = filepath
 
-    # 4. Handle Voice Notes
+# 4. Handle Audio Notes
     elif message.audio:
         kind = "audio"
         file_id = message.audio.file_id
         new_file = await context.bot.get_file(file_id)
+        
         file_suffix = Path(message.audio.file_name or "").suffix
         if not file_suffix and message.audio.mime_type:
             file_suffix = f".{message.audio.mime_type.split('/')[-1]}"
+            
         filepath = os.path.join(DOWNLOAD_DIR, f"{file_id}{file_suffix or '.audio'}")
         await new_file.download_to_drive(filepath)
-        argument_data = filepath
+        
+        # Convert downloaded file to WAV
+        wav_filepath = await convert_to_wav(filepath)
+        
+        state.current_media_path = wav_filepath
+        argument_data = wav_filepath
 
     # 5. Handle Voice Notes
     elif message.voice:
         kind = "voice"
         file_id = message.voice.file_id
         new_file = await context.bot.get_file(file_id)
+        
         filepath = os.path.join(DOWNLOAD_DIR, f"{file_id}.ogg")
         await new_file.download_to_drive(filepath)
-        argument_data = filepath
+        
+        # Convert downloaded file to WAV
+        wav_filepath = await convert_to_wav(filepath)
+        
+        state.current_media_path = wav_filepath
+        argument_data = wav_filepath
 
     print(f"Message type: {kind} received. Kickstarting internal task...")
     
@@ -211,8 +236,6 @@ def setup_gpio():
         state.display.set_black()
     else:
         print("Warning: gpiozero not found. Mocking button functionality.")
-    if AudioController is not None:
-        state.audio = AudioController()
 
 def main():
     global application

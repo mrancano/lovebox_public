@@ -1,111 +1,43 @@
 import os
-import shlex
-import shutil
-import subprocess
-import tempfile
+import asyncio
 from pathlib import Path
 
+async def convert_to_wav(input_filepath: str) -> str:
+    """
+    Asynchronously converts an audio file to a standard 16-bit, 44100Hz WAV 
+    file suitable for aplay natively.
+    """
+    path = Path(input_filepath)
+    
+    # Skip conversion if already a wav
+    if path.suffix.lower() == '.wav':
+        return input_filepath 
 
-_DEFAULT_PLAYERS = (
-    ("aplay", ["-q"]),  # Moved to the top to prioritize ALSA for WAV playback
-    ("ffplay", ["-nodisp", "-autoexit", "-loglevel", "error"]),
-    ("ogg123", ["-q"]),
-    ("mpg123", ["-q"]),
-    ("paplay", []),
-)
+    output_filepath = str(path.with_suffix('.wav'))
 
+    # FFmpeg arguments to force format: 44.1kHz, stereo, 16-bit little-endian PCM
+    command = [
+        "ffmpeg",
+        "-y",                   # Overwrite output files silently
+        "-i", input_filepath,   # Input file
+        "-ar", "44100",         # Sample rate
+        "-ac", "2",             # Channels (Stereo)
+        "-c:a", "pcm_s16le",    # Codec (16-bit little endian)
+        output_filepath
+    ]
 
-class AudioController:
-    """Controller for playing audio files via a system audio player."""
+    # Run FFmpeg asynchronously to avoid blocking the bot's event loop
+    process = await asyncio.create_subprocess_exec(
+        *command,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL
+    )
+    await process.communicate()
 
-    def __init__(self, player: str | None = None):
-        self._player_spec = player or os.getenv("LOVEBOX_AUDIO_PLAYER")
-        self._player_cmd: list[str] | None = None
-        self._process: subprocess.Popen | None = None
-
-    def _resolve_player(self):
-        if self._player_cmd:
-            return
-
-        if self._player_spec:
-            tokens = shlex.split(self._player_spec)
-            executable = tokens[0]
-            player_path = shutil.which(executable)
-            if not player_path:
-                raise FileNotFoundError(f"Audio player not found: {executable}")
-            self._player_cmd = [player_path] + tokens[1:]
-            return
-
-        for player, args in _DEFAULT_PLAYERS:
-            player_path = shutil.which(player)
-            if player_path:
-                self._player_cmd = [player_path] + args
-                return
-
-        raise FileNotFoundError(
-            "No supported audio player found. Install aplay, ffplay, ogg123, mpg123, or set LOVEBOX_AUDIO_PLAYER."
-        )
-
-    def _convert_to_wav(self, file_path: Path) -> Path:
-            """Converts the input file to a strictly formatted WAV using ffmpeg."""
-            if not shutil.which("ffmpeg"):
-                raise FileNotFoundError("ffmpeg is required to convert audio to WAV but was not found.")
-
-            # Create a temporary file for the WAV output
-            fd, temp_wav_path = tempfile.mkstemp(suffix=".wav")
-            os.close(fd) 
-
-            try:
-                # Force ALSA/Adafruit-friendly format: 16-bit, 48kHz, Stereo
-                subprocess.run(
-                    [
-                        "ffmpeg", "-y", "-i", str(file_path),
-                        "-acodec", "pcm_s16le",  # Force S16_LE (16-bit little-endian)
-                        "-ar", "48000",          # Force 48000Hz sample rate
-                        "-ac", "2",              # Force 2 channels (stereo)
-                        temp_wav_path
-                    ],
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-            except subprocess.CalledProcessError as e:
-                os.remove(temp_wav_path)
-                raise RuntimeError(f"Failed to convert {file_path} to WAV.") from e
-
-            return Path(temp_wav_path)
-
-    def play_audio(self, file_path: str):
-        audio_file = Path(file_path)
-        if not audio_file.exists():
-            raise FileNotFoundError(f"Audio file does not exist: {audio_file}")
-
-        self._resolve_player()
-
-        if self._process and self._process.poll() is None:
-            raise RuntimeError("Audio playback already in progress.")
-
-        # Ensure the file is a WAV
-        wav_file = self._convert_to_wav(audio_file)
-
-        try:
-            self._process = subprocess.Popen(self._player_cmd + [str(wav_file)])
-            return_code = self._process.wait()
-            self._process = None
-
-            if return_code != 0:
-                raise RuntimeError(f"Audio playback failed with exit code {return_code}.")
-        finally:
-            # Clean up the temporary WAV file if one was created
-            if wav_file != audio_file and wav_file.exists():
-                wav_file.unlink()
-
-    def stop(self):
-        if self._process and self._process.poll() is None:
-            self._process.terminate()
-            try:
-                self._process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._process.kill()
-                self._process.wait(timeout=5)
-            self._process = None
+    if process.returncode == 0:
+        # Optional: Remove the original file to save space on the Pi SD card
+        # os.remove(input_filepath) 
+        return output_filepath
+    else:
+        print(f"Failed to convert {input_filepath}")
+        return input_filepath # Fallback to original if it fails
