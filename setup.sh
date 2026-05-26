@@ -31,4 +31,8 @@ echo "=== Installing Python Requirements ==="
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -r requirements.txt
 
-echo "=== Setup Complete! ==="
+echo "=== Activating SPI === "
+sudo raspi-config nonint do_spi 0
+
+echo "=== Setup Complete! Rebooting ==="
+sudo reboot

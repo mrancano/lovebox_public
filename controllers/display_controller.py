@@ -26,7 +26,7 @@ class DisplayController:
         port: int = 0,
         device: int = 0,
         bus_speed_hz: int = 28000000,
-        rotate: int = 1,
+        rotate: int = 0,
         gpio_dc: int = 24,
         gpio_rst: int = 25,
     ):
