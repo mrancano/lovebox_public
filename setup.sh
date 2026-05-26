@@ -12,7 +12,7 @@ echo "=== Updating System OS ==="
 sudo apt-get update && sudo apt-get upgrade -y
 
 echo "=== Installing Dependencies ==="
-sudo apt-get install -y git python3-venv python3-pip
+sudo apt-get install -y git python3-venv python3-pip swig python3-dev
 
 echo "=== Setting up Lovebox Directory ==="
 if [ ! -d "$APP_DIR" ]; then
