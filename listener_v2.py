@@ -9,6 +9,7 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from controllers.servo_controller import ServoController
 from controllers.display_controller import DisplayController
 from controllers.audio_controller import convert_to_wav
+from controllers.text_to_png import text_to_png
 
 try:
     from gpiozero import Button
@@ -66,6 +67,9 @@ async def process_message(kind: str, argument_data: str):
         if kind == "text":
             print(f"The text says: {argument_data}")
             # Simulate some long-running work
+            text_image_path = text_to_png(argument_data)
+            if state.display:
+                state.display.display_image(text_image_path)
             await asyncio.sleep(5)
         elif kind == "video":
             print(f"Processing file located at: {argument_data}")
