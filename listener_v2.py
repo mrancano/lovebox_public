@@ -14,6 +14,7 @@ try:
 except ImportError:
     # Fallback for testing environments without gpiozero
     Button = None
+    print("gpiozero not found. Button functionality will be disabled.")
 
 # Directory to save incoming media
 DOWNLOAD_DIR = "/home/mrancano/telegram_media"
