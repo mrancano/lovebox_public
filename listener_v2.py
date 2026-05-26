@@ -81,8 +81,8 @@ async def process_message(kind: str, argument_data: str):
             # Run aplay asynchronously
             process = await asyncio.create_subprocess_exec(
                 "aplay", state.current_media_path,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL
+                stdout=None,#asyncio.subprocess.DEVNULL,
+                stderr=None,#asyncio.subprocess.DEVNULL
             )
             
             # Await the process to finish playing the audio
@@ -103,8 +103,7 @@ async def process_message(kind: str, argument_data: str):
         
         print("Processing finished cleanly.")
     except asyncio.CancelledError:
-        if state.audio:
-            state.audio.stop()
+        process.kill() # Ensure any subprocesses are killed immediately on cancellation
         print("Processing task was CANCELLED.")
         raise
     finally:
