@@ -8,6 +8,7 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
 from controllers.servo_controller import ServoController
 from controllers.display_controller import DisplayController
+from controllers.audio_controller import AudioController
 
 try:
     from gpiozero import Button
@@ -38,6 +39,7 @@ class AppState:
         self.main_loop = None
         self.servo = None
         self.display = None
+        self.audio = None
 state = AppState()
 application = None
 
@@ -65,10 +67,16 @@ async def process_message(kind: str, argument_data: str):
             print(f"The text says: {argument_data}")
             # Simulate some long-running work
             await asyncio.sleep(5)
-        elif kind in ["video", "voice"]:
+        elif kind == "video":
             print(f"Processing file located at: {argument_data}")
             # Simulate some long-running work
             await asyncio.sleep(5)
+        elif kind in ["audio", "voice"]:
+            print(f"Playing audio located at: {argument_data}")
+            if state.audio:
+                await asyncio.to_thread(state.audio.play_audio, argument_data)
+            else:
+                print("Audio controller not initialized.")
         elif kind == "photo":
             print(f"Displaying photo located at: {argument_data}")
             if state.display:
@@ -80,6 +88,8 @@ async def process_message(kind: str, argument_data: str):
         
         print("Processing finished cleanly.")
     except asyncio.CancelledError:
+        if state.audio:
+            state.audio.stop()
         print("Processing task was CANCELLED.")
         raise
     finally:
@@ -134,6 +144,18 @@ async def trigger_program(update: Update, context: ContextTypes.DEFAULT_TYPE):
         argument_data = filepath
 
     # 4. Handle Voice Notes
+    elif message.audio:
+        kind = "audio"
+        file_id = message.audio.file_id
+        new_file = await context.bot.get_file(file_id)
+        file_suffix = Path(message.audio.file_name or "").suffix
+        if not file_suffix and message.audio.mime_type:
+            file_suffix = f".{message.audio.mime_type.split('/')[-1]}"
+        filepath = os.path.join(DOWNLOAD_DIR, f"{file_id}{file_suffix or '.audio'}")
+        await new_file.download_to_drive(filepath)
+        argument_data = filepath
+
+    # 5. Handle Voice Notes
     elif message.voice:
         kind = "voice"
         file_id = message.voice.file_id
@@ -189,6 +211,8 @@ def setup_gpio():
         state.display.set_black()
     else:
         print("Warning: gpiozero not found. Mocking button functionality.")
+    if AudioController is not None:
+        state.audio = AudioController()
 
 def main():
     global application
@@ -203,7 +227,14 @@ def main():
     application = Application.builder().token(TELEGRAM_KEY).post_init(capture_loop).build()
 
     # Create a filter that accepts Text, Photos, image Documents, Videos, and Voice messages
-    media_filter = filters.TEXT | filters.PHOTO | filters.Document.IMAGE | filters.VIDEO | filters.VOICE
+    media_filter = (
+        filters.TEXT
+        | filters.PHOTO
+        | filters.Document.IMAGE
+        | filters.VIDEO
+        | filters.AUDIO
+        | filters.VOICE
+    )
 
     # Listen for those specific types
     application.add_handler(MessageHandler(media_filter, trigger_program))
