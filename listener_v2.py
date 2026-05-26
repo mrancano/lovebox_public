@@ -80,7 +80,7 @@ async def process_message(kind: str, argument_data: str):
                         
             # Run aplay asynchronously
             process = await asyncio.create_subprocess_exec(
-                "aplay","-D", "plughw:1,0", state.current_media_path,
+                "aplay","-D", "plughw:0,0", state.current_media_path,
                 stdout=None,#asyncio.subprocess.DEVNULL,
                 stderr=None,#asyncio.subprocess.DEVNULL
             )
