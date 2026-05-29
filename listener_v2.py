@@ -233,7 +233,7 @@ def setup_gpio():
         hardware_button.when_pressed = button_callback
     if ServoController is not None:
         state.servo = ServoController()
-        state.servo = None
+        # state.servo = None
     if DisplayController is not None:
         state.display = DisplayController()
         state.display.set_black()
