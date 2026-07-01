@@ -66,49 +66,63 @@ async def process_message(kind: str, argument_data: str):
         state.servo.go_to_degrees(180)
         if kind == "text":
             print(f"The text says: {argument_data}")
-            # Simulate some long-running work
-            text_image_path = text_to_png(argument_data)
-            if state.display:
-                state.display.display_image(text_image_path)
-            await asyncio.sleep(5)
+            # Create display on-demand, use it, then release immediately
+            # to avoid SPI/I2S DMA conflicts during audio playback.
+            display = DisplayController()
+            try:
+                text_image_path = text_to_png(argument_data)
+                display.display_image(text_image_path)
+                await asyncio.sleep(5)
+            finally:
+                display.set_black()
+                display.close()
         elif kind == "video":
             print(f"Processing file located at: {argument_data}")
-            # Simulate some long-running work
             await asyncio.sleep(5)
         elif kind in ["audio", "voice"]:
+            # No display to release — display is never held between messages.
+            # I2S has the DMA channel to itself.
             print(f"Playing audio located at: {state.current_media_path}")
                         
-            # Run aplay asynchronously
+            # Run aplay directly on hardware — bypasses dmix (which
+            # breaks if the aplay.service primary process dies)
             process = await asyncio.create_subprocess_exec(
-                "aplay","-D", "plughw:0,0", state.current_media_path,
-                stdout=None,#asyncio.subprocess.DEVNULL,
-                stderr=None,#asyncio.subprocess.DEVNULL
+                "aplay","-D", "hw:0,0", state.current_media_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
             
             # Await the process to finish playing the audio
-            await process.communicate()
+            stdout, stderr = await process.communicate()
             
             if process.returncode == 0:
                 print("Audio playback finished successfully.")
             else:
-                print(f"Failed to play audio at {state.current_media_path}. Check aplay logs.")
+                print(f"Failed to play audio at {state.current_media_path}.")
+                if stderr:
+                    print(f"aplay stderr: {stderr.decode().strip()}")
+                if stdout:
+                    print(f"aplay stdout: {stdout.decode().strip()}")
         elif kind == "photo":
             print(f"Displaying photo located at: {argument_data}")
-            if state.display:
-                state.display.display_image(argument_data)
-                state.display.display_image(argument_data)
-            # Simulate some long-running work
-            await asyncio.sleep(5)
+            display = DisplayController()
+            try:
+                display.display_image(argument_data)
+                await asyncio.sleep(5)
+            finally:
+                display.set_black()
+                display.close()
 
         
         print("Processing finished cleanly.")
     except asyncio.CancelledError:
-        process.kill() # Ensure any subprocesses are killed immediately on cancellation
+        # Kill aplay subprocess if it was started (audio messages only)
+        if 'process' in locals():
+            process.kill()
         print("Processing task was CANCELLED.")
         raise
     finally:
         state.servo.go_to_degrees(0)
-        state.display.set_black()
         cleanup_media()
         state.active_task = None
         print("State reset to idle.")
@@ -234,9 +248,14 @@ def setup_gpio():
     if ServoController is not None:
         state.servo = ServoController()
         # state.servo = None
+    # Display is NOT initialized here — it's created on-demand for text/photo
+    # and destroyed immediately after to avoid SPI/I2S DMA conflicts during audio.
     if DisplayController is not None:
-        state.display = DisplayController()
-        state.display.set_black()
+        # Quick black screen on startup, then release
+        temp_display = DisplayController()
+        temp_display.set_black()
+        temp_display.close()
+        print("Display initialized (boot black screen, then released).")
     else:
         print("Warning: gpiozero not found. Mocking button functionality.")
 

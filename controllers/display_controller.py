@@ -120,3 +120,41 @@ class DisplayController:
     def set_black(self):
         black = Image.new("RGB", self.size, "black")
         self._lcd.display(self._prepare_frame(black))
+
+    def close(self):
+        """Release SPI resources and reload I2S driver so audio works again.
+        
+        On Pi Zero 2W, SPI and I2S share DMA channels. Once SPI initializes,
+        the I2S driver loses its DMA channel and won't reclaim it even after
+        SPI is released. Reloading the I2S modules forces a fresh allocation.
+        """
+        try:
+            # luma stores the spidev as: _lcd._serial_interface._spi
+            spi_dev = self._lcd._serial_interface._spi
+            spi_dev.close()
+        except Exception as e:
+            print(f"Error closing SPI: {e}")
+
+        # Reload I2S kernel modules to reclaim DMA channel
+        import subprocess
+        try:
+            subprocess.run(
+                ["sudo", "modprobe", "-r",
+                 "snd_soc_rpi_simple_soundcard", "snd_soc_pcm5102a", "snd_soc_bcm2835_i2s"],
+                capture_output=True, timeout=5,
+            )
+            subprocess.run(
+                ["sudo", "modprobe", "snd_soc_bcm2835_i2s"],
+                capture_output=True, timeout=5,
+            )
+            subprocess.run(
+                ["sudo", "modprobe", "snd_soc_pcm5102a"],
+                capture_output=True, timeout=5,
+            )
+            subprocess.run(
+                ["sudo", "modprobe", "snd_soc_rpi_simple_soundcard"],
+                capture_output=True, timeout=5,
+            )
+            print("Display released, I2S audio restored.")
+        except Exception as e:
+            print(f"Error reloading I2S modules: {e}")

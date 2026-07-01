@@ -29,15 +29,17 @@ async def convert_to_wav(input_filepath: str) -> str:
     # Run FFmpeg asynchronously to avoid blocking the bot's event loop
     process = await asyncio.create_subprocess_exec(
         *command,
-        stdout=None,#asyncio.subprocess.DEVNULL,
-        stderr=None,#asyncio.subprocess.DEVNULL
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
-    await process.communicate()
+    stdout, stderr = await process.communicate()
 
     if process.returncode == 0:
         # Optional: Remove the original file to save space on the Pi SD card
         # os.remove(input_filepath) 
         return output_filepath
     else:
-        print(f"Failed to convert {input_filepath}")
+        print(f"FFmpeg failed to convert {input_filepath}")
+        if stderr:
+            print(f"FFmpeg stderr: {stderr.decode().strip()[:500]}")
         return input_filepath # Fallback to original if it fails
