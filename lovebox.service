@@ -1,0 +1,18 @@
+[Unit]
+Description=Lovebox Telegram Listener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mrancano
+WorkingDirectory=/home/mrancano/src/lovebox
+ExecStart=/home/mrancano/src/lovebox/.venv/bin/python /home/mrancano/src/lovebox/listener_v2.py
+Restart=always
+RestartSec=10
+
+# Prevent the service from starting before WiFi is actually connected.
+# RaspAP handles the AP/client switching; we wait for a real connection.
+
+[Install]
+WantedBy=multi-user.target

@@ -220,6 +220,11 @@ async def handle_button_press():
         print("Cancelling active task...")
         state.active_task.cancel()
         # cleanup_media will be called in the finally block of process_message
+        if application and application.bot:
+            try:
+                await application.bot.send_message(chat_id=MY_CHAT_ID, text="message cleared")
+            except Exception as e:
+                print(f"Failed to send 'message cleared': {e}")
     else:
         print("Button pressed while idle.")
         if application and application.bot:
@@ -287,6 +292,8 @@ def main():
     finally:
         if hardware_button is not None:
             hardware_button.close()
+        if state.servo is not None:
+            state.servo.cleanup()
         cleanup_media()
 
 if __name__ == "__main__":

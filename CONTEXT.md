@@ -40,6 +40,8 @@ The Lovebox is a DIY long-distance communication device. A sender transmits text
 ```
 lovebox/
 ├── listener_v2.py          # MAIN ENTRY POINT — Telegram bot + orchestration
+├── lovebox.service         # systemd unit — auto-starts listener on boot
+├── wifi_provision.sh       # Installs RaspAP for headless WiFi setup
 ├── controllers/
 │   ├── __init__.py          # Re-exports all controllers
 │   ├── display_controller.py # ILI9486 TFT via luma.lcd (SPI)
@@ -57,11 +59,49 @@ lovebox/
 │   ├── test_LED.py
 │   └── test_mechanical.py
 ├── requirements.txt
-├── setup.sh                # One-time provisioning (has `mpv'` typo!)
+├── setup.sh                # One-time provisioning (HW + dependencies)
+├── wifi_provision.sh       # One-time RaspAP install for WiFi onboarding
 ├── run.sh                  # Starts listener_v2.py in venv
 ├── update.sh               # git pull
 └── .env                    # Contains TELEGRAM_KEY and MY_CHAT_ID
 ```
+
+### Boot & WiFi Provisioning Flow
+
+```
+                    Pi boots
+                       │
+                       ▼
+          ┌────────────────────────┐
+          │ RaspAP: known WiFi?     │
+          └───────────┬────────────┘
+                      │
+            ┌─────────┴─────────┐
+            │                   │
+            ▼                   ▼
+        YES                   NO
+   "Connect to           "Start AP mode
+    her WiFi"           'Lovebox Setup'"
+            │                   │
+            ▼                   ▼
+     network-online      Girlfriend connects
+            │            phone to the hotspot
+            ▼                   │
+     systemd starts             ▼
+     lovebox.service      Captive portal opens
+            │             (http://10.3.141.1)
+            ▼                   │
+     listener_v2.py             ▼
+     polls Telegram       She picks her WiFi
+            │             + enters password
+            ▼                   │
+     ❤️ Lovebox live!          ▼
+                          Pi writes credentials
+                          + reboots ──► back to top
+```
+
+RaspAP handles the AP ↔ client switching seamlessly. Once provisioned,
+the Pi connects automatically on every subsequent boot.
 
 ### Data Flow
 
@@ -181,9 +221,9 @@ dtoverlay=hifiberry-dac
 ## 8. Remaining Tasks
 
 ### 8.1 High Priority
-1. **Fix setup.sh typo:** Change `mpv'` to `mpv` in the apt-get install line
-2. **Add servo cleanup on shutdown:** `listener_v2.py`'s `main()` does not call `state.servo.cleanup()` on exit — add to the `finally` block
-3. **Simplify /etc/asound.conf:** The dmix + softvol chain is unnecessary — could be simplified to just use `hw:0,0`, though this is cosmetic since we bypass it anyway
+1. ~~Fix setup.sh typo~~ ✅ **DONE** — `mpv'` → `mpv`
+2. ~~Add servo cleanup on shutdown~~ ✅ **DONE** — `state.servo.cleanup()` added to `main()` finally block
+3. **Simplify /etc/asound.conf:** The dmix + softvol chain is unnecessary — could be simplified to just use `hw:0,0`, though this is cosmetic since we bypass it anyway. (Pi-side file, not in workspace.)
 
 ### 8.2 Low Priority
 4. **Monitor SD card:** Kernel log shows `I/O error, dev mmcblk0` — possible card corruption
@@ -240,6 +280,8 @@ TERMINAL: [paste any printed output]
 | File | Purpose |
 |------|---------|
 | `listener_v2.py` | Main bot: message handling, GPIO, orchestration |
+| `lovebox.service` | systemd unit — auto-starts listener on boot |
+| `wifi_provision.sh` | Installs RaspAP for headless WiFi onboarding |
 | `controllers/audio_controller.py` | FFmpeg WAV conversion (now captures stderr) |
 | `controllers/display_controller.py` | ILI9486 TFT via luma.lcd + color correction |
 | `controllers/servo_controller.py` | SG90 PWM control via RPi.GPIO |
@@ -247,7 +289,8 @@ TERMINAL: [paste any printed output]
 | `testing/test_audio_amp.py` | SD pin A/B diagnostic |
 | `testing/test_integration_audio.py` | Step-by-step HW+audio isolation test |
 | `testing/test_tone.wav` | 440Hz 3s stereo test tone |
-| `setup.sh` | One-time provisioning (has mpv typo) |
+| `setup.sh` | One-time provisioning (HW + dependencies) |
+| `/etc/systemd/system/lovebox.service` | Enabled service — auto-runs listener |
 | `/etc/asound.conf` | ALSA config (dmix+softvol, from Adafruit) |
 | `/etc/systemd/system/aplay.service` | DISABLED — was playing /dev/zero through dmix |
 | `/boot/firmware/config.txt` | Device tree overlays (i2s-mmap REMOVED) |
