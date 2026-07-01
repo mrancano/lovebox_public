@@ -31,6 +31,14 @@ if [ -f "$RASPAP_CONFIG" ]; then
 fi
 
 echo ""
+echo "=== Allowing passwordless modprobe (I2S audio reload) ==="
+# display_controller.py runs sudo modprobe to reload I2S after SPI use.
+# The systemd service has no TTY, so sudo needs passwordless access.
+echo "mrancano ALL=(ALL) NOPASSWD: /usr/sbin/modprobe" | sudo tee /etc/sudoers.d/lovebox > /dev/null
+sudo chmod 440 /etc/sudoers.d/lovebox
+echo "Sudoers drop-in created."
+
+echo ""
 echo "=== Setting up Lovebox systemd service (auto-start on boot) ==="
 
 # Copy the service file and enable it
