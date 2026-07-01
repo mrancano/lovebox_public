@@ -67,13 +67,13 @@ lovebox/
 
 ```
 Telegram → listener_v2.py (python-telegram-bot polling)
-  ├─ text  → text_to_png() → display_controller.display_image()
-  ├─ photo → display_controller.display_image()
-  ├─ audio/voice → audio_controller.convert_to_wav() → aplay -D hw:0,0
+  ├─ text  → text_to_png() → display_controller.display_image() → stays on screen
+  ├─ photo → display_controller.display_image() → stays on screen
+  ├─ audio/voice → audio_controller.convert_to_wav() → aplay -D hw:0,0 (loops)
   └─ video → (not implemented, just sleeps)
 
 Button → GPIO callback → handle_button_press()
-  ├─ If playing: cancel current task
+  ├─ If active task: cancel it → display clears / audio stops → servo returns to 0°
   └─ If idle: send ❤️ reply via Telegram
 ```
 
@@ -84,11 +84,12 @@ Button → GPIO callback → handle_button_press()
 | Feature | Status | Details |
 |---------|--------|---------|
 | Telegram bot polling | ✅ | Receives all message types |
-| Text display | ✅ | Converts text → PNG → TFT screen |
-| Image display | ✅ | Downloads and displays photos; handles color profiles |
-| Servo movement | ✅ | Moves to 180° on message, back to 0° on finish |
+| Text display | ✅ | Converts text → PNG → TFT screen; stays on until button press |
+| Image display | ✅ | Downloads and displays photos; stays on until button press |
+| Servo movement | ✅ | Moves to 180° on message, back to 0° on button press |
 | Button cancel | ✅ | Cancels active playback; sends ❤️ when idle |
 | Audio download + conversion | ✅ | Downloads from Telegram, FFmpeg → WAV |
+| Audio looping | ✅ | Audio loops continuously until button cancels |
 | Display controller | ✅ | ILI9486 with luma.lcd, correct orientation, color correction |
 | Audio in isolation | ✅ | `aplay -D hw:0,0` works when I2S driver is healthy |
 | RPi.GPIO + audio coexistence | ✅ | Servo PWM does NOT corrupt I2S |

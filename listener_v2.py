@@ -61,18 +61,20 @@ def cleanup_media():
 
 async def process_message(kind: str, argument_data: str):
     """The async task that replaces on_message.py"""
+    process = None  # Track aplay subprocess for cancellation (audio loop)
     try:
         print(f"Target program started. Processing {kind}...")
         state.servo.go_to_degrees(180)
         if kind == "text":
             print(f"The text says: {argument_data}")
-            # Create display on-demand, use it, then release immediately
-            # to avoid SPI/I2S DMA conflicts during audio playback.
+            # Create display on-demand — stays on screen until button cancels this task.
             display = DisplayController()
             try:
                 text_image_path = text_to_png(argument_data)
                 display.display_image(text_image_path)
-                await asyncio.sleep(5)
+                # Wait indefinitely — button press cancels this task,
+                # which triggers the finally block to clean up the display.
+                await asyncio.Event().wait()
             finally:
                 display.set_black()
                 display.close()
@@ -80,44 +82,39 @@ async def process_message(kind: str, argument_data: str):
             print(f"Processing file located at: {argument_data}")
             await asyncio.sleep(5)
         elif kind in ["audio", "voice"]:
-            # No display to release — display is never held between messages.
-            # I2S has the DMA channel to itself.
-            print(f"Playing audio located at: {state.current_media_path}")
-                        
-            # Run aplay directly on hardware — bypasses dmix (which
-            # breaks if the aplay.service primary process dies)
-            process = await asyncio.create_subprocess_exec(
-                "aplay","-D", "hw:0,0", state.current_media_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            
-            # Await the process to finish playing the audio
-            stdout, stderr = await process.communicate()
-            
-            if process.returncode == 0:
-                print("Audio playback finished successfully.")
-            else:
-                print(f"Failed to play audio at {state.current_media_path}.")
-                if stderr:
-                    print(f"aplay stderr: {stderr.decode().strip()}")
-                if stdout:
-                    print(f"aplay stdout: {stdout.decode().strip()}")
+            # Loop audio playback until button cancels this task.
+            # I2S has the DMA channel to itself (display is never held open).
+            print(f"Looping audio at: {state.current_media_path}")
+            while True:
+                process = await asyncio.create_subprocess_exec(
+                    "aplay", "-D", "hw:0,0", state.current_media_path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await process.communicate()
+
+                if process.returncode == 0:
+                    print("Audio loop finished, restarting...")
+                else:
+                    print(f"aplay failed (rc={process.returncode}), stopping loop.")
+                    if stderr:
+                        print(f"aplay stderr: {stderr.decode().strip()}")
+                    break
         elif kind == "photo":
-            print(f"Displaying photo located at: {argument_data}")
+            print(f"Displaying photo at: {argument_data}")
             display = DisplayController()
             try:
                 display.display_image(argument_data)
-                await asyncio.sleep(5)
+                # Wait indefinitely until button cancels this task.
+                await asyncio.Event().wait()
             finally:
                 display.set_black()
                 display.close()
 
-        
         print("Processing finished cleanly.")
     except asyncio.CancelledError:
-        # Kill aplay subprocess if it was started (audio messages only)
-        if 'process' in locals():
+        # Kill the current aplay subprocess (audio loop) if still running
+        if process is not None and process.returncode is None:
             process.kill()
         print("Processing task was CANCELLED.")
         raise
