@@ -41,7 +41,8 @@ The Lovebox is a DIY long-distance communication device. A sender transmits text
 lovebox/
 ├── listener_v2.py          # MAIN ENTRY POINT — Telegram bot + orchestration
 ├── lovebox.service         # systemd unit — auto-starts listener on boot
-├── wifi_provision.sh       # Installs RaspAP for headless WiFi setup
+├── bootstrap.sh            # Disaster recovery: blank Pi → working Lovebox in one command
+├── wifi_provision.sh       # Installs RaspAP for headless WiFi setup (idempotent)
 ├── controllers/
 │   ├── __init__.py          # Re-exports all controllers
 │   ├── display_controller.py # ILI9486 TFT via luma.lcd (SPI)
@@ -102,6 +103,20 @@ lovebox/
 
 RaspAP handles the AP ↔ client switching seamlessly. Once provisioned,
 the Pi connects automatically on every subsequent boot.
+
+### Disaster Recovery (Fresh SD Card)
+
+When visiting with a blank SD card:
+
+1. Flash Raspberry Pi OS Lite with Pi Imager (set hostname, enable SSH, pre-configure temp WiFi)
+2. Boot Pi → SSH in
+3. `scp bootstrap.sh pi@lovebox:~/`
+4. `ssh pi@lovebox`
+5. `bash bootstrap.sh` — does everything: installs git, clones repo, runs setup.sh + wifi_provision.sh
+6. Create `.env` with `TELEGRAM_KEY` and `MY_CHAT_ID`
+7. `sudo reboot` — Lovebox is ready
+
+`setup.sh` and `wifi_provision.sh` are both idempotent — safe to re-run.
 
 ### Data Flow
 

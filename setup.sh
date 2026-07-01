@@ -37,5 +37,9 @@ echo "=== Installing Python Requirements ==="
 echo "=== Activating SPI === "
 sudo raspi-config nonint do_spi 0
 
-echo "=== Setup Complete! Rebooting ==="
-sudo reboot
+echo "=== Setup Complete! ==="
+echo ""
+echo "Next: run wifi_provision.sh for WiFi onboarding + auto-start."
+echo "Or run bootstrap.sh to do everything in one go."
+echo ""
+echo "Reboot with: sudo reboot"

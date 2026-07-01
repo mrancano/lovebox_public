@@ -1,62 +1,61 @@
 #!/bin/bash
-# wifi_provision.sh — Install RaspAP for headless WiFi provisioning
-# Run this ONCE on the Pi before giving the Lovebox to your girlfriend.
+# wifi_provision.sh — Install RaspAP for headless WiFi provisioning.
+# Idempotent: safe to run multiple times. Already-installed steps are skipped.
 #
 # What this does:
 # 1. Installs RaspAP (lightweight AP + captive portal)
 # 2. Configures the AP SSID to "Lovebox Setup"
-# 3. On boot: if no known WiFi is found within ~60s, AP mode activates
-# 4. Girlfriend connects phone to "Lovebox Setup" WiFi
-# 5. Portal shows available networks → she picks hers + enters password
-# 6. Pi reboots → connects to her WiFi → Lovebox listener auto-starts
+# 3. Grants passwordless sudo for modprobe (I2S audio reload)
+# 4. Installs & enables the lovebox systemd service
+# 5. On boot: if no known WiFi is found, AP mode activates
+# 6. Girlfriend connects phone to "Lovebox Setup" WiFi → picks her WiFi → reboots
 
 set -e
 
-echo "=== Installing RaspAP (WiFi Provisioning) ==="
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Install RaspAP with minimal extras (no OpenVPN, no ad blocking)
-curl -sL https://install.raspap.com | bash -s -- --yes --openvpn-disable --adblock-disable
+echo "=== WiFi Provisioning for Lovebox ==="
 
-echo ""
-echo "=== Configuring AP name to 'Lovebox Setup' ==="
+# ── Step 1: RaspAP ──────────────────────────────────────────────
+if [ -f /etc/hostapd/hostapd.conf ]; then
+    echo "[SKIP] RaspAP already installed (hostapd.conf exists)."
+else
+    echo "[INSTALL] RaspAP (WiFi hotspot + captive portal)..."
+    curl -sL https://install.raspap.com | bash -s -- --yes --openvpn-disable --adblock-disable
+fi
 
-# RaspAP stores hotspot SSID in /etc/hostapd/hostapd.conf
-# Default is "raspi-webgui", change to "Lovebox Setup"
+# ── Step 2: AP SSID ─────────────────────────────────────────────
+echo "[CONFIG] Setting AP name to 'Lovebox Setup'..."
 sudo sed -i 's/^ssid=.*/ssid=Lovebox Setup/' /etc/hostapd/hostapd.conf 2>/dev/null || true
 
-# Also update RaspAP's config so the web UI shows the correct name
 RASPAP_CONFIG="/etc/raspap/hostapd.ini"
 if [ -f "$RASPAP_CONFIG" ]; then
     sudo sed -i 's/^ssid[[:space:]]*=.*/ssid = Lovebox Setup/' "$RASPAP_CONFIG" 2>/dev/null || true
 fi
 
-echo ""
-echo "=== Allowing passwordless modprobe (I2S audio reload) ==="
-# display_controller.py runs sudo modprobe to reload I2S after SPI use.
-# The systemd service has no TTY, so sudo needs passwordless access.
-echo "mrancano ALL=(ALL) NOPASSWD: /usr/sbin/modprobe" | sudo tee /etc/sudoers.d/lovebox > /dev/null
-sudo chmod 440 /etc/sudoers.d/lovebox
-echo "Sudoers drop-in created."
+# ── Step 3: Passwordless sudo for modprobe ──────────────────────
+SUDOERS_FILE="/etc/sudoers.d/lovebox"
+if [ -f "$SUDOERS_FILE" ]; then
+    echo "[SKIP] Sudoers drop-in already exists."
+else
+    echo "[INSTALL] Passwordless modprobe (for I2S audio reload)..."
+    echo "mrancano ALL=(ALL) NOPASSWD: /usr/sbin/modprobe" | sudo tee "$SUDOERS_FILE" > /dev/null
+    sudo chmod 440 "$SUDOERS_FILE"
+fi
 
-echo ""
-echo "=== Setting up Lovebox systemd service (auto-start on boot) ==="
-
-# Copy the service file and enable it
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# ── Step 4: systemd service ────────────────────────────────────
 SERVICE_FILE="$SCRIPT_DIR/lovebox.service"
-
 if [ -f "$SERVICE_FILE" ]; then
     sudo cp "$SERVICE_FILE" /etc/systemd/system/lovebox.service
     sudo systemctl daemon-reload
     sudo systemctl enable lovebox.service
-    echo "Systemd service installed and enabled."
+    echo "[INSTALL] systemd service installed & enabled."
 else
-    echo "WARNING: lovebox.service not found in $SCRIPT_DIR"
-    echo "Create it manually or re-clone the repo."
+    echo "[WARN] lovebox.service not found in $SCRIPT_DIR — skipping."
 fi
 
 echo ""
-echo "=== WiFi Provisioning Setup Complete! ==="
+echo "=== Done! ==="
 echo ""
 echo "How it works for your girlfriend:"
 echo "  1. She plugs in the Lovebox at her apartment"
@@ -67,10 +66,5 @@ echo "  5. She picks her apartment WiFi, enters the password"
 echo "  6. Pi reboots → connects to her WiFi → Lovebox starts!"
 echo ""
 echo "Default RaspAP admin: username=admin, password=secret"
-echo "Change this at http://10.3.141.1 after connecting."
 echo ""
-echo "Reboot now? (y/n)"
-read -r REPLY
-if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
-    sudo reboot
-fi
+echo "Reboot with: sudo reboot"
